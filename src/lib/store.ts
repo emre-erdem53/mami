@@ -3,12 +3,15 @@ import path from "path";
 import type {
   AgencyService,
   AgencyState,
+  CalendarEvent,
   Client,
   Deal,
   PaymentEntry,
+  Project,
   Prospect,
   Reminder,
   Task,
+  TeamMember,
 } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -70,9 +73,79 @@ const defaultState = (): AgencyState => ({
   integrationSettings: defaultIntegrationSettings(),
 });
 
+/** Bozuk JSON (null eleman, eksik id) RSC render'da patlamasın. */
+function normalizeServicesFromRaw(raw: unknown): AgencyService[] {
+  if (!Array.isArray(raw)) return defaultAgencyServiceCatalog();
+  const out: AgencyService[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Partial<AgencyService>;
+    if (typeof o.id !== "string" || !o.id || typeof o.name !== "string") continue;
+    out.push({
+      id: o.id,
+      name: o.name,
+      description: typeof o.description === "string" ? o.description : undefined,
+    });
+  }
+  return out.length > 0 ? out : defaultAgencyServiceCatalog();
+}
+
+function sanitizeProjects(raw: unknown): Project[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Project[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const p = x as Partial<Project>;
+    if (typeof p.id !== "string" || typeof p.clientId !== "string") continue;
+    out.push({
+      id: p.id,
+      clientId: p.clientId,
+      name: typeof p.name === "string" ? p.name : "",
+      createdAt: typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString(),
+      planStartDate: typeof p.planStartDate === "string" ? p.planStartDate : undefined,
+      planEndDate: typeof p.planEndDate === "string" ? p.planEndDate : undefined,
+    });
+  }
+  return out;
+}
+
+const EVENT_TYPES: CalendarEvent["type"][] = ["post", "shoot", "ad_start", "other"];
+
+function sanitizeEvents(raw: unknown): CalendarEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CalendarEvent[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const e = x as Partial<CalendarEvent>;
+    if (typeof e.id !== "string" || typeof e.clientId !== "string" || typeof e.startDate !== "string") {
+      continue;
+    }
+    const type = EVENT_TYPES.includes(e.type as CalendarEvent["type"])
+      ? (e.type as CalendarEvent["type"])
+      : "other";
+    out.push({
+      id: e.id,
+      clientId: e.clientId,
+      title: typeof e.title === "string" ? e.title : "",
+      type,
+      startDate: e.startDate,
+      endDate: typeof e.endDate === "string" ? e.endDate : undefined,
+      notes: typeof e.notes === "string" ? e.notes : undefined,
+    });
+  }
+  return out;
+}
+
 function normalizePaymentEntry(e: PaymentEntry): PaymentEntry {
+  if (!e || typeof e !== "object") {
+    return { id: "", amount: 0, date: "" };
+  }
   return {
     ...e,
+    id: typeof e.id === "string" ? e.id : "",
+    amount: typeof e.amount === "number" && !Number.isNaN(e.amount) ? e.amount : 0,
+    date: typeof e.date === "string" ? e.date : "",
+    note: typeof e.note === "string" ? e.note : undefined,
     invoiceNo: e.invoiceNo,
   };
 }
@@ -87,7 +160,7 @@ function normalizeClient(c: Client & { tags?: unknown }): Client {
     sector: String(c.sector ?? ""),
     leadSource: String(c.leadSource ?? ""),
     notes: String(c.notes ?? ""),
-    serviceIds: Array.isArray(c.serviceIds) ? c.serviceIds : [],
+    serviceIds: Array.isArray(c.serviceIds) ? c.serviceIds.filter((x) => typeof x === "string") : [],
     createdAt: c.createdAt,
     currency: c.currency ?? "TRY",
     priority: c.priority ?? "medium",
@@ -95,7 +168,9 @@ function normalizeClient(c: Client & { tags?: unknown }): Client {
     ownerMemberId: c.ownerMemberId,
     payment: {
       agreementAmount: typeof c.payment?.agreementAmount === "number" ? c.payment.agreementAmount : 0,
-      entries: (c.payment?.entries ?? []).map(normalizePaymentEntry),
+      entries: (c.payment?.entries ?? [])
+        .filter((e): e is PaymentEntry => e != null && typeof e === "object")
+        .map(normalizePaymentEntry),
       nextDueDate: c.payment?.nextDueDate,
     },
   };
@@ -115,19 +190,29 @@ function normalizeDeal(d: Deal & { pipelineStage?: unknown }): Deal {
   };
 }
 
+const TASK_STATUSES: Task["status"][] = ["not_started", "in_progress", "done", "cancelled"];
+
 function normalizeTask(t: Task): Task {
+  const status = TASK_STATUSES.includes(t.status) ? t.status : "not_started";
   return {
     ...t,
+    status,
     clientApproval: t.clientApproval ?? "none",
     recurrence: t.recurrence ?? "none",
     closedAt: t.closedAt,
   };
 }
 
+const REMINDER_KINDS: Reminder["kind"][] = ["call", "payment", "other"];
+
 function normalizeReminder(r: Reminder): Reminder {
+  const kind = REMINDER_KINDS.includes(r.kind as Reminder["kind"]) ? r.kind : "other";
   return {
     ...r,
+    title: typeof r.title === "string" ? r.title : "",
     dueAt: typeof r.dueAt === "string" ? r.dueAt : "",
+    kind,
+    done: Boolean(r.done),
     recurrence: r.recurrence ?? "none",
   };
 }
@@ -168,21 +253,58 @@ export function normalizeState(raw: Partial<AgencyState> | null | undefined): Ag
     recentClientIds: raw.preferences?.recentClientIds ?? [],
   };
 
+  const clientRows = Array.isArray(raw.clients) ? raw.clients : [];
+  const prospectRows = Array.isArray(raw.prospects) ? raw.prospects : [];
+  const dealRows = Array.isArray(raw.deals) ? raw.deals : [];
+  const taskRows = Array.isArray(raw.tasks) ? raw.tasks : [];
+  const reminderRows = Array.isArray(raw.reminders) ? raw.reminders : [];
+
   return {
     ...d,
     ...raw,
-    clients: (raw.clients ?? []).map(normalizeClient),
-    prospects: (raw.prospects ?? []).map(normalizeProspect),
-    services: Array.isArray(raw.services) ? raw.services : defaultAgencyServiceCatalog(),
-    deals: (raw.deals ?? []).map(normalizeDeal),
-    projects: raw.projects ?? [],
-    tasks: (raw.tasks ?? []).map(normalizeTask),
-    events: raw.events ?? [],
+    clients: clientRows
+      .filter(
+        (c): c is Client & { tags?: unknown } =>
+          c != null && typeof c === "object" && typeof (c as Client).id === "string"
+      )
+      .map(normalizeClient),
+    prospects: prospectRows
+      .filter(
+        (p): p is Prospect & { tags?: unknown } =>
+          p != null && typeof p === "object" && typeof (p as Prospect).id === "string"
+      )
+      .map(normalizeProspect),
+    services: normalizeServicesFromRaw(raw.services),
+    deals: dealRows
+      .filter(
+        (x): x is Deal & { pipelineStage?: unknown } =>
+          x != null &&
+          typeof x === "object" &&
+          typeof (x as Deal).id === "string" &&
+          typeof (x as Deal).clientId === "string"
+      )
+      .map(normalizeDeal),
+    projects: sanitizeProjects(raw.projects),
+    tasks: taskRows
+      .filter(
+        (t): t is Task =>
+          t != null && typeof t === "object" && typeof (t as Task).id === "string" && typeof (t as Task).projectId === "string"
+      )
+      .map(normalizeTask),
+    events: sanitizeEvents(raw.events),
     adMetrics: raw.adMetrics ?? [],
     assets: raw.assets ?? [],
-    teamMembers:
-      raw.teamMembers?.length ? raw.teamMembers : d.teamMembers,
-    reminders: (raw.reminders ?? []).map(normalizeReminder),
+    teamMembers: (() => {
+      if (!Array.isArray(raw.teamMembers) || raw.teamMembers.length === 0) return d.teamMembers;
+      const tm = raw.teamMembers.filter(
+        (m): m is TeamMember =>
+          m != null && typeof m === "object" && typeof (m as TeamMember).id === "string"
+      );
+      return tm.length > 0 ? tm : d.teamMembers;
+    })(),
+    reminders: reminderRows
+      .filter((r): r is Reminder => r != null && typeof r === "object" && typeof (r as Reminder).id === "string")
+      .map(normalizeReminder),
     activities: raw.activities ?? [],
     projectTemplates: raw.projectTemplates ?? [],
     auditLog: raw.auditLog ?? [],

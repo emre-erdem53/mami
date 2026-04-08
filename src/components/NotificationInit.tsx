@@ -29,6 +29,7 @@ export function NotificationInit({
     const dueSoon = reminders.filter(
       (r) =>
         !r.done &&
+        Boolean(r.dueAt) &&
         (r.dueAt.startsWith(today) || r.dueAt.startsWith(tomorrow))
     );
 

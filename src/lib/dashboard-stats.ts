@@ -8,7 +8,9 @@ export function dashboardStatsFromState(s: AgencyState) {
   let monthlyRevenue = 0;
   for (const c of s.clients) {
     for (const e of c.payment.entries) {
-      if (e.date.startsWith(ym)) monthlyRevenue += e.amount;
+      if (typeof e?.date === "string" && e.date.startsWith(ym) && typeof e.amount === "number") {
+        monthlyRevenue += e.amount;
+      }
     }
   }
 

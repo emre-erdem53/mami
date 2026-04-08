@@ -23,7 +23,13 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(sessionCookieName())?.value;
-  if (!(await verifySessionToken(token))) {
+  let sessionOk = false;
+  try {
+    sessionOk = await verifySessionToken(token);
+  } catch {
+    sessionOk = false;
+  }
+  if (!sessionOk) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
