@@ -20,6 +20,9 @@
 # production
 /build
 
+# local agency data
+/data/agency.json
+
 # misc
 .DS_Store
 *.pem
