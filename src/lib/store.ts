@@ -127,6 +127,7 @@ function normalizeTask(t: Task): Task {
 function normalizeReminder(r: Reminder): Reminder {
   return {
     ...r,
+    dueAt: typeof r.dueAt === "string" ? r.dueAt : "",
     recurrence: r.recurrence ?? "none",
   };
 }
@@ -216,7 +217,11 @@ export async function readState(): Promise<AgencyState> {
   } catch (e) {
     if (isENOENT(e)) {
       const initial = normalizeState({});
-      await writeState(initial);
+      try {
+        await writeState(initial);
+      } catch {
+        // Vercel / salt okunur FS: dosya yok ve yazılamıyor; boş şablonu bellekten döndür.
+      }
       return initial;
     }
     return defaultState();

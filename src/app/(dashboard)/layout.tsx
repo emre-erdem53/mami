@@ -30,6 +30,7 @@ export default async function DashboardLayout({
     .filter(
       (r) =>
         !r.done &&
+        Boolean(r.dueAt) &&
         (r.dueAt.startsWith(today) || r.dueAt.startsWith(tomorrow))
     )
     .map((r) => ({ title: r.title, dueAt: r.dueAt, done: r.done }));
