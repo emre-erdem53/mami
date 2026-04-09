@@ -47,6 +47,7 @@ export function AppShell({
   remindersForNotify = [],
   overdueTasksForNotify = [],
   authEnabled = false,
+  storageHint = "Veriler yerelde data/agency.json dosyasında.",
 }: {
   children: React.ReactNode;
   pinned?: ShellClientLink[];
@@ -55,6 +56,8 @@ export function AppShell({
   remindersForNotify?: { title: string; dueAt: string; done: boolean }[];
   overdueTasksForNotify?: { title: string; companyName: string }[];
   authEnabled?: boolean;
+  /** Sunucu (layout) tarafından üretilen depolama açıklaması */
+  storageHint?: string;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -269,12 +272,7 @@ export function AppShell({
           ) : null}
           <p className="mt-4 flex items-start gap-2 px-1 text-[10px] leading-relaxed text-zinc-600">
             <Database className="mt-0.5 size-3 shrink-0 text-zinc-500" />
-            <span>
-              Veriler yerelde{" "}
-              <code className="rounded bg-zinc-800/80 px-1 py-0.5 text-zinc-400">
-                data/agency.json
-              </code>
-            </span>
+            <span>{storageHint}</span>
           </p>
         </div>
       </aside>

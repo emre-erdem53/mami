@@ -30,7 +30,7 @@ import { btnPrimary, btnSecondary, card, input, labelSm, select } from "@/compon
 import { cn } from "@/lib/cn";
 import { pageWrap } from "@/components/ui/page-layout";
 
-/** Her istekte `data/agency.json` güncel okunur (statik önbellek yok). */
+/** Her istekte durum okunur: `DATABASE_URL` varsa Neon, yoksa `data/agency.json` (önbellek yok). */
 export const dynamic = "force-dynamic";
 
 const reminderKindLabel: Record<Reminder["kind"], string> = {

@@ -1,5 +1,10 @@
 import { promises as fs } from "fs";
 import path from "path";
+import {
+  isDatabaseConfigured,
+  readAgencyPayloadFromDb,
+  writeAgencyPayloadToDb,
+} from "./agency-db";
 import type {
   AgencyService,
   AgencyState,
@@ -16,6 +21,11 @@ import type {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "agency.json");
+
+/** Panel alt bilgisi + ortam kontrolü */
+export function persistenceMode(): "neon" | "file" {
+  return isDatabaseConfigured() ? "neon" : "file";
+}
 
 /** Eski dosyalarda `services` yoksa varsayılan katalog */
 export function defaultAgencyServiceCatalog(): AgencyService[] {
@@ -332,6 +342,25 @@ function isENOENT(e: unknown): boolean {
 }
 
 export async function readState(): Promise<AgencyState> {
+  if (isDatabaseConfigured()) {
+    try {
+      const raw = await readAgencyPayloadFromDb();
+      if (raw === null) {
+        const initial = normalizeState({});
+        try {
+          await writeAgencyPayloadToDb(initial);
+        } catch (e) {
+          console.error("[mami] Neon ilk kayıt yazılamadı", e);
+        }
+        return initial;
+      }
+      return normalizeState(raw);
+    } catch (e) {
+      console.error("[mami] Neon okuma hatası", e);
+      return normalizeState({});
+    }
+  }
+
   try {
     const raw = await fs.readFile(DATA_FILE, "utf8");
     const parsed = JSON.parse(raw) as Partial<AgencyState>;
@@ -351,6 +380,10 @@ export async function readState(): Promise<AgencyState> {
 }
 
 export async function writeState(next: AgencyState): Promise<void> {
+  if (isDatabaseConfigured()) {
+    await writeAgencyPayloadToDb(next);
+    return;
+  }
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(DATA_FILE, JSON.stringify(next, null, 2), "utf8");
 }

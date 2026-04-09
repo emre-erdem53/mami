@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { addDaysYMD, localYMD } from "@/lib/date-utils";
 import { isAuthEnabled } from "@/lib/session";
-import { readState } from "@/lib/store";
+import { persistenceMode, readState } from "@/lib/store";
 import { isOpenTask } from "@/lib/task-utils";
 
 export default async function DashboardLayout({
@@ -47,6 +47,11 @@ export default async function DashboardLayout({
       };
     });
 
+  const storageHint =
+    persistenceMode() === "neon"
+      ? "Veriler Neon PostgreSQL'de (agency_state tablosu, tek satır JSON)."
+      : "Veriler yerelde data/agency.json dosyasında.";
+
   return (
     <AppShell
       pinned={pinned}
@@ -55,6 +60,7 @@ export default async function DashboardLayout({
       remindersForNotify={remindersForNotify}
       overdueTasksForNotify={overdueTasksForNotify}
       authEnabled={isAuthEnabled()}
+      storageHint={storageHint}
     >
       {children}
     </AppShell>

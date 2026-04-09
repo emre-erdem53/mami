@@ -10,6 +10,7 @@
     "seed:reset": "rm -f data/agency.json && echo 'Bir sonraki istekte boş şablon (varsayılan katalog + tek ekip üyesi) oluşturulur.'"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
     "react": "19.2.4",
